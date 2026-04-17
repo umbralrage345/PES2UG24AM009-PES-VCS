@@ -139,27 +139,27 @@ int index_status(const Index *index) {
 int index_load(Index *index) {
     index->count = 0;
 
-    FILE *f = fopen(INDEX_FILE, "r");
+    FILE *f = fopen(".pes/index", "r");
     if (!f)
         return 0;
 
     while (index->count < MAX_INDEX_ENTRIES) {
-        IndexEntry *e = &index->entries[index->count];
-
+        IndexEntry temp;
         char hex[HASH_HEX_SIZE + 1];
 
-        int rc = fscanf(f, "%o %64s %lu %u %511s",
-                        &e->mode,
+        int rc = fscanf(f, "%o %64s %llu %u %511s",
+                        &temp.mode,
                         hex,
-                        &e->mtime_sec,
-                        &e->size,
-                        e->path);
+                        &temp.mtime_sec,
+                        &temp.size,
+                        temp.path);
 
         if (rc != 5)
             break;
 
-        hex_to_hash(hex, &e->hash);
-        index->count++;
+        hex_to_hash(hex, &temp.hash);
+
+        index->entries[index->count++] = temp;
     }
 
     fclose(f);
@@ -181,19 +181,23 @@ static int compare_index_entries(const void *a, const void *b) {
     return strcmp(((IndexEntry *)a)->path, ((IndexEntry *)b)->path);
 }
 
+
+
+
 int index_save(const Index *index) {
     Index temp = *index;
 
     qsort(temp.entries, temp.count, sizeof(IndexEntry), compare_index_entries);
 
     FILE *f = fopen(".pes/index.tmp", "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
 
     for (int i = 0; i < temp.count; i++) {
         char hex[HASH_HEX_SIZE + 1];
         hash_to_hex(&temp.entries[i].hash, hex);
 
-        fprintf(f, "%o %s %lu %u %s\n",
+        fprintf(f, "%o %s %llu %u %s\n",
                 temp.entries[i].mode,
                 hex,
                 temp.entries[i].mtime_sec,
@@ -201,15 +205,11 @@ int index_save(const Index *index) {
                 temp.entries[i].path);
     }
 
-    fflush(f);
-    fsync(fileno(f));
     fclose(f);
 
-    rename(".pes/index.tmp", INDEX_FILE);
-
+    rename(".pes/index.tmp", ".pes/index");
     return 0;
 }
-
 // Stage a file for the next commit.
 //
 // HINTS - Useful functions and syscalls:
@@ -229,20 +229,21 @@ int index_add(Index *index, const char *path) {
     if (!f)
         return -1;
 
-    void *data = malloc(st.st_size ? st.st_size : 1);
+    size_t sz = (size_t)st.st_size;
+    void *data = malloc(sz ? sz : 1);
+
     if (!data) {
         fclose(f);
         return -1;
     }
 
-    if (st.st_size > 0)
-        fread(data, 1, st.st_size, f);
-
+    if (sz > 0)
+    fread(data, 1, sz, f);
     fclose(f);
 
     ObjectID id;
 
-    if (object_write(OBJ_BLOB, data, st.st_size, &id) != 0) {
+    if (object_write(OBJ_BLOB, data, sz, &id) != 0) {
         free(data);
         return -1;
     }
@@ -255,8 +256,7 @@ int index_add(Index *index, const char *path) {
         if (index->count >= MAX_INDEX_ENTRIES)
             return -1;
 
-        entry = &index->entries[index->count];
-        index->count++;
+        entry = &index->entries[index->count++];
     }
 
     entry->mode = get_file_mode(path);
