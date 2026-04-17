@@ -177,9 +177,7 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
-static int compare_index_entries(const void *a, const void *b) {
-    return strcmp(((IndexEntry *)a)->path, ((IndexEntry *)b)->path);
-}
+
 
 
 
