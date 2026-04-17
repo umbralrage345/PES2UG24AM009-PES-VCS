@@ -229,26 +229,42 @@ int index_add(Index *index, const char *path) {
     if (!f)
         return -1;
 
-    void *data = malloc(st.st_size);
-    fread(data, 1, st.st_size, f);
+    void *data = malloc(st.st_size ? st.st_size : 1);
+    if (!data) {
+        fclose(f);
+        return -1;
+    }
+
+    if (st.st_size > 0)
+        fread(data, 1, st.st_size, f);
+
     fclose(f);
 
     ObjectID id;
-    object_write(OBJ_BLOB, data, st.st_size, &id);
+
+    if (object_write(OBJ_BLOB, data, st.st_size, &id) != 0) {
+        free(data);
+        return -1;
+    }
 
     free(data);
 
     IndexEntry *entry = index_find(index, path);
 
     if (!entry) {
-        entry = &index->entries[index->count++];
+        if (index->count >= MAX_INDEX_ENTRIES)
+            return -1;
+
+        entry = &index->entries[index->count];
+        index->count++;
     }
 
     entry->mode = get_file_mode(path);
     entry->hash = id;
-    entry->mtime_sec = st.st_mtime;
-    entry->size = st.st_size;
-    strcpy(entry->path, path);
+    entry->mtime_sec = (uint64_t)st.st_mtime;
+    entry->size = (uint32_t)st.st_size;
+    strncpy(entry->path, path, sizeof(entry->path) - 1);
+    entry->path[sizeof(entry->path) - 1] = '\0';
 
     return index_save(index);
 }
