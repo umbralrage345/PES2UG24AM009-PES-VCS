@@ -134,28 +134,42 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-    Index index;
-
-    if (index_load(&index) != 0)
-        return -1;
+    FILE *f = fopen(".pes/index", "r");
 
     Tree tree;
     tree.count = 0;
 
-    for (int i = 0; i < index.count; i++) {
-        TreeEntry *entry = &tree.entries[tree.count];
+    if (f) {
+        while (tree.count < MAX_TREE_ENTRIES) {
+            TreeEntry *entry = &tree.entries[tree.count];
 
-        entry->mode = index.entries[i].mode;
-        entry->hash = index.entries[i].hash;
+            char hex[HASH_HEX_SIZE + 1];
+            uint64_t mtime;
+            uint32_t size;
+            char path[512];
 
-        const char *name = strrchr(index.entries[i].path, '/');
+            int rc = fscanf(f, "%o %64s %lu %u %511s",
+                            &entry->mode,
+                            hex,
+                            &mtime,
+                            &size,
+                            path);
 
-        if (name)
-            strcpy(entry->name, name + 1);
-        else
-            strcpy(entry->name, index.entries[i].path);
+            if (rc != 5)
+                break;
 
-        tree.count++;
+            hex_to_hash(hex, &entry->hash);
+
+            const char *name = strrchr(path, '/');
+            if (name)
+                strcpy(entry->name, name + 1);
+            else
+                strcpy(entry->name, path);
+
+            tree.count++;
+        }
+
+        fclose(f);
     }
 
     void *data;
