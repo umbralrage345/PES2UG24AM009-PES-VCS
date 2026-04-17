@@ -137,7 +137,11 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return -1;
     }
 
-    write(fd, buffer, total_len);
+   if (write(fd, buffer, total_len) != (ssize_t)total_len) {
+    close(fd);
+    free(buffer);
+    return -1;
+}
     fsync(fd);
     close(fd);
 
