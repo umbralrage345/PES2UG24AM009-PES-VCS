@@ -185,30 +185,26 @@ static int compare_index_entries(const void *a, const void *b) {
 
 
 int index_save(const Index *index) {
-    Index temp = *index;
-
-    qsort(temp.entries, temp.count, sizeof(IndexEntry), compare_index_entries);
-
     FILE *f = fopen(".pes/index.tmp", "w");
     if (!f)
         return -1;
 
-    for (int i = 0; i < temp.count; i++) {
+    for (int i = 0; i < index->count; i++) {
         char hex[HASH_HEX_SIZE + 1];
-        hash_to_hex(&temp.entries[i].hash, hex);
+
+        hash_to_hex(&index->entries[i].hash, hex);
 
         fprintf(f, "%o %s %llu %u %s\n",
-                temp.entries[i].mode,
+                index->entries[i].mode,
                 hex,
-                temp.entries[i].mtime_sec,
-                temp.entries[i].size,
-                temp.entries[i].path);
+                (unsigned long long)index->entries[i].mtime_sec,
+                index->entries[i].size,
+                index->entries[i].path);
     }
 
     fclose(f);
 
-    rename(".pes/index.tmp", ".pes/index");
-    return 0;
+    return rename(".pes/index.tmp", ".pes/index");
 }
 // Stage a file for the next commit.
 //
